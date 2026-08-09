@@ -32,9 +32,18 @@
   const transcriptEl = document.getElementById('transcript');
   const closeBtn = document.getElementById('closeBtn');
 
+  // O formulário que abriu esta janela manda o token e a própria URL
+  // dele nos parâmetros da URL, para sabermos para onde enviar o texto.
+  const params = new URLSearchParams(window.location.search);
+  const TOKEN = params.get('token');
+  const APP_URL = params.get('appUrl');
+
   const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-  if (!SpeechRecognitionApi) {
+  if (!TOKEN || !APP_URL) {
+    statusEl.textContent = 'Esta janela precisa ser aberta a partir do formulário de cadastro.';
+    if (micBtn) { micBtn.disabled = true; micBtn.classList.add('opacity-40', 'cursor-not-allowed'); }
+  } else if (!SpeechRecognitionApi) {
     statusEl.textContent = 'Este navegador não suporta reconhecimento de voz. Use o Google Chrome.';
     micBtn.disabled = true;
     micBtn.classList.add('opacity-40', 'cursor-not-allowed');
@@ -66,13 +75,20 @@
       transcriptEl.textContent = '"' + transcript + '"';
       transcriptEl.classList.remove('hidden');
 
-      // Envia o texto reconhecido de volta para a janela que abriu este pop-up
-      if (window.opener) {
-        window.opener.postMessage({ type: 'voiceTranscript', transcript: transcript }, '*');
-      }
+      const separador = APP_URL.indexOf('?') === -1 ? '?' : '&';
+      const urlEnvio = APP_URL + separador + 'action=salvarVoz' +
+        '&token=' + encodeURIComponent(TOKEN) +
+        '&texto=' + encodeURIComponent(transcript);
 
-      closeBtn.classList.remove('hidden');
-      setTimeout(function () { window.close(); }, 1200);
+      // "no-cors": não precisamos ler a resposta, só garantir que o
+      // Apps Script recebeu o texto e guardou para o formulário buscar.
+      fetch(urlEnvio, { mode: 'no-cors' })
+        .catch(function () { /* mesmo com erro de leitura, a requisição pode ter chegado */ })
+        .finally(function () {
+          statusEl.textContent = 'Prontinho! Pode fechar esta janela.';
+          closeBtn.classList.remove('hidden');
+          setTimeout(function () { window.close(); }, 800);
+        });
     };
 
     micBtn.addEventListener('click', function () {
