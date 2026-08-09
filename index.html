@@ -56,6 +56,24 @@
     return segmentosConcluidos.concat(resultadosSessaoAtual).join(' ').replace(/\s+/g, ' ').trim();
   }
 
+  /** Registra um trecho final reconhecido. Se ele for apenas uma versão mais
+   *  completa do último trecho já guardado (comportamento comum no Android,
+   *  que reenvia o texto crescendo do zero), substitui em vez de somar. Caso
+   *  contrário (comportamento comum no desktop), adiciona como trecho novo. */
+  function adicionarResultadoFinal_(novoTexto) {
+    const novo = (novoTexto || '').trim();
+    if (!novo) return;
+
+    const ultimoIndice = resultadosSessaoAtual.length - 1;
+    const anterior = ultimoIndice >= 0 ? resultadosSessaoAtual[ultimoIndice].trim() : '';
+
+    if (anterior && novo.toLowerCase().indexOf(anterior.toLowerCase()) === 0) {
+      resultadosSessaoAtual[ultimoIndice] = novo; // é o mesmo trecho, só mais completo
+    } else {
+      resultadosSessaoAtual.push(novo); // é um trecho realmente novo
+    }
+  }
+
   if (!TOKEN || !APP_URL) {
     statusEl.textContent = 'Esta janela precisa ser aberta a partir do formulário de cadastro.';
     micBtn.disabled = true;
@@ -115,8 +133,7 @@
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const resultado = event.results[i];
         if (resultado.isFinal) {
-          // Guarda pela posição DENTRO DESTA SESSÃO - não soma, substitui.
-          resultadosSessaoAtual[i] = resultado[0].transcript;
+          adicionarResultadoFinal_(resultado[0].transcript);
         } else {
           interim += resultado[0].transcript;
         }
