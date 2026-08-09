@@ -48,7 +48,9 @@
   const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
 
   let transcricaoFinal = '';
+  let resultadosFinais = []; // guarda o texto final de cada "trecho" reconhecido, por posição
   let ouvindo = false;
+  let usuarioConcluiu = false;
 
   if (!TOKEN || !APP_URL) {
     statusEl.textContent = 'Esta janela precisa ser aberta a partir do formulário de cadastro.';
@@ -67,26 +69,27 @@
 
     recognition.onstart = function () {
       ouvindo = true;
-      transcricaoFinal = '';
       statusEl.textContent = 'Ouvindo... fale a frase completa e clique em "Concluído" quando terminar.';
       micBtn.classList.add('bg-red-500', 'text-white', 'animate-pulse');
       micBtn.classList.remove('bg-indigo-100', 'text-indigo-600');
       concluirBtn.classList.remove('hidden');
-      transcriptEl.classList.add('hidden');
-      closeBtn.classList.add('hidden');
     };
 
     recognition.onend = function () {
       ouvindo = false;
       micBtn.classList.remove('bg-red-500', 'text-white', 'animate-pulse');
       micBtn.classList.add('bg-indigo-100', 'text-indigo-600');
-      concluirBtn.classList.add('hidden');
 
-      // Se já havia texto reconhecido quando a escuta parou (seja porque o
-      // usuário clicou em "Concluído" ou porque o navegador encerrou sozinho
-      // após um silêncio muito longo), envia o que foi entendido até aqui.
-      if (transcricaoFinal.trim()) {
-        enviarTranscricao_(transcricaoFinal.trim());
+      if (usuarioConcluiu) {
+        // O usuário clicou em "Concluído": envia o que foi reconhecido.
+        concluirBtn.classList.add('hidden');
+        if (transcricaoFinal.trim()) enviarTranscricao_(transcricaoFinal.trim());
+      } else {
+        // O próprio navegador encerrou a escuta sozinho (comum no Android,
+        // mesmo em modo contínuo) - retoma automaticamente, sem que o
+        // usuário precise perceber ou clicar em nada de novo.
+        statusEl.textContent = 'Ainda ouvindo... (retomando automaticamente)';
+        try { recognition.start(); } catch (e) { /* já iniciando, ignora */ }
       }
     };
 
@@ -100,20 +103,31 @@
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const resultado = event.results[i];
         if (resultado.isFinal) {
-          transcricaoFinal += resultado[0].transcript + ' ';
+          // Guarda pela POSIÇÃO (não soma) - se o navegador reenviar o
+          // mesmo trecho de novo, ele substitui em vez de duplicar.
+          resultadosFinais[i] = resultado[0].transcript;
         } else {
           interim += resultado[0].transcript;
         }
       }
-      transcriptEl.textContent = '"' + (transcricaoFinal + interim).trim() + '"';
+      transcricaoFinal = resultadosFinais.join(' ');
+      transcriptEl.textContent = '"' + (transcricaoFinal + ' ' + interim).trim() + '"';
       transcriptEl.classList.remove('hidden');
     };
 
     micBtn.addEventListener('click', function () {
-      if (!ouvindo) recognition.start();
+      if (!ouvindo) {
+        transcricaoFinal = '';
+        resultadosFinais = [];
+        usuarioConcluiu = false;
+        transcriptEl.classList.add('hidden');
+        closeBtn.classList.add('hidden');
+        recognition.start();
+      }
     });
 
     concluirBtn.addEventListener('click', function () {
+      usuarioConcluiu = true;
       recognition.stop(); // isso dispara onend, que envia o texto reconhecido
     });
   }
